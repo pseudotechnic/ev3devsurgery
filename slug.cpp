@@ -4,6 +4,7 @@
 #include <fstream>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 #define PI 3.14159265
@@ -15,6 +16,7 @@
 	std::ofstream time_sp;
 	std::ofstream position_sp;
 	std::ofstream command;
+	std::ofstream position;
 	
 	std::string roll ="/sys/class/tacho-motor/motor0";
 	std::string drive = "/sys/class/tacho-motor/motor1";
@@ -37,7 +39,7 @@
 
 //initialize methods
 double radToDeg(double x);
-int* angleCalc(double x, double y, double z, double ang);
+void angleCalc(double pX, double pY, double pZ, double ang, int* answer);
 int driveM(double x, double y, double z, double ang);        
 	
 	int main()
@@ -46,7 +48,7 @@ int driveM(double x, double y, double z, double ang);
 	  double yCoord= 10; 
 	  double zCoord= 0; 
 	  double angle= 90;
-		drive(xCoord,yCoord,zCoord,angle);
+		driveM(xCoord,yCoord,zCoord,angle);
 	}
 
 	//radian to degree converter
@@ -57,27 +59,29 @@ int driveM(double x, double y, double z, double ang);
 	}
 	
 	//calculate the angles
-	int* angleCalc(double x, double y, double z, double ang)
+	void angleCalc(double pX, double pY, double pZ, double ang, int* answer)
 	{		
+	  //double pX = L1*cos(angle1) + L2*cos(angle1 + angle2);
+	  //double pY = L2*sin(angle1) + L2*sin(angle1 + angle2); 
+
 		double pXF = pX + L3*ang; 
 		double pXY = pY + L3*ang; 
 		
-		double pX = L1*cos(angle1) + L2*cos(angle1 + angle2);
-		double pY = L2*sin(angle1) + L2*sin(angle1 + angle2); 
+		int angle1 = ceil(radToDeg((0.5*asin((pX*pX + pY*pY - L1*L1)/(L2*L2)))-acos((pX*pX + pY*pY - (L1*L1 + L2*L2))/(2*L1*L2))));
+		int angle2 = ceil(radToDeg(acos((pX*pX + pY*pY - (L1*L1 + L2*L2))/(2*L1*L2))));
+		int angle3 = ceil(radToDeg(ang - (0.5*asin((pX*pX + pY*pY - L1*L1)/(L2*L2)))));
 		
-		int angle1 = ceil(radToDeg((0.5*asin((pX^2 + pY^2 - L1^2)/L2^2))-acos((pX^2 + pY^2 - (L1^2 + L2^2))/2*L1*L2)));
-		int angle2 = ceil(radToDeg(acos((pX^2 + pY^2 - (L1^2 + L2^2))/2*L1*L2)));
-		int angle3 = ceil(radToDeg(ang - (0.5*asin((pX^2 + pY^2 - L1^2)/L2^2))));
-		
-		int answer[3] = {angle1, angle2, angle3};
-		return answer;
+		answer[0] = angle1;
+		answer[1] = angle2;
+		answer[2] = angle3;
 	}
 	
 	//drive to the listed position inverse kinematics
 	//drive(10,10,0,90)
-	int drive(double x, double y, double z, double ang)
+	int driveM(double x, double y, double z, double ang)
 	{		
-		int angleData[3] = angleCalc(x,y,z,ang);
+		int angleData[3];
+		angleCalc(x,y,z,ang, angleData);
 			//check which gear it's on
 			if(abs(posGear - 75) < 10) //arm
 			{
@@ -85,10 +89,15 @@ int driveM(double x, double y, double z, double ang);
 				//11cm
 					
 				//open drive
-				duty_cycle_sp.open(drive+"/duty_cycle_sp",std::ofstream::out);
-				position_sp.open(drive+"/position_sp", std::ofstream::out);
-				command.open(drive+"/command",std::ofstream::out);
-				position.open(drive+"/position");
+				std::string path;
+				path = drive+"/duty_cycle_sp";
+				duty_cycle_sp.open(path.c_str() ,std::ofstream::out);
+				path = drive+"/position_sp";
+				position_sp.open(path.c_str(), std::ofstream::out);
+				path = drive+"/command";
+				command.open(path.c_str() ,std::ofstream::out);
+				path = drive+"/position";
+				position.open(path.c_str());
 				
 				position << ang1 << std::endl;
 	
@@ -97,24 +106,27 @@ int driveM(double x, double y, double z, double ang);
 				std::cout << "Set position." << std::endl;
 				position_sp << angleData[0] << std::endl;
 				std::cout << "Set command." << std::endl;
-				command << run_to_abs_pos << std::endl;
+				command << "run_to_abs_pos" << std::endl;
 	
-				Sleep(3);
+				sleep(3);
 				ang1 = angleData[0];
 					
 				//open gears
-				duty_cycle_sp.open(gear+"/duty_cycle_sp",std::ofstream::out);
-				position_sp.open(gear+"/position_sp", std::ofstream::out);
-				command.open(gear+"/command",std::ofstream::out);
-				position.open(gear+"/position");
-				
+				path = gear+"/duty_cycle_sp";
+				duty_cycle_sp.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position_sp";
+				position_sp.open(path.c_str(), std::ofstream::out);
+				path = gear+"/command";
+				command.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position";
+				position.open(path.c_str());
 	
 				std::cout <<"Set duty cycle." <<std::endl;
 				duty_cycle_sp << 100 << std::endl;
 				std::cout << "Set position." << std::endl;
 				position_sp << 165 << std::endl;
 				std::cout << "Set command." << std::endl;
-				command << run_to_abs_pos << std::endl;
+				command << "run_to_abs_pos" << std::endl;
 			}	
 			else if(abs(posGear - 165) < 15 ) //forearm
 			{ 
@@ -124,10 +136,15 @@ int driveM(double x, double y, double z, double ang);
 				//20cm
 					
 				//open drive
-				duty_cycle_sp.open(drive+"/duty_cycle_sp",std::ofstream::out);
-				position_sp.open(drive+"/position_sp", std::ofstream::out);
-				command.open(drive+"/command",std::ofstream::out);
-				position.open(drive+"/position");
+				std::string path;
+				path = drive+"/duty_cycle_sp";
+				duty_cycle_sp.open(path.c_str(),std::ofstream::out);
+				path = drive+"/position_sp";
+				position_sp.open(path.c_str(), std::ofstream::out);
+				path = drive+"/command";
+				command.open(path.c_str(), std::ofstream::out);
+				path = drive+"/position";
+				position.open(path.c_str());
 					
 				position << ang2 << std::endl;
 
@@ -136,23 +153,27 @@ int driveM(double x, double y, double z, double ang);
 				std::cout << "Set position." << std::endl;
 				position_sp << angleData[1] << std::endl;
 				std::cout << "Set command." << std::endl;
-				command << run_to_abs_pos << std::endl;
+				command << "run_to_abs_pos" << std::endl;
 		
-				Sleep(3);
+				sleep(3);
 				ang2 = angleData[1];	
 
 				//open gears
-				duty_cycle_sp.open(gear+"/duty_cycle_sp",std::ofstream::out);
-				position_sp.open(gear+"/position_sp", std::ofstream::out);
-				command.open(gear+"/command",std::ofstream::out);
-				position.open(gear+"/position");
+				path = gear+"/duty_cycle_sp";
+				duty_cycle_sp.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position_sp";
+				position_sp.open(path.c_str(), std::ofstream::out);
+				path = gear+"/command";
+				command.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position";
+				position.open(path.c_str());
 					
 				std::cout <<"Set duty cycle." <<std::endl;
 				duty_cycle_sp << 100 << std::endl;
 				std::cout << "Set position." << std::endl;
 				position_sp << 23 << std::endl;
 				std::cout << "Set command." << std::endl;
-				command << run_to_abs_pos << std::endl;					
+				command << "run_to_abs_pos" << std::endl;					
 			}	
 			else if(abs(posGear-23) < 23) //finger
 			{
@@ -160,35 +181,44 @@ int driveM(double x, double y, double z, double ang);
 				//9.5cm
 					
 				//open drive
-				duty_cycle_sp.open(drive+"/duty_cycle_sp",std::ofstream::out);
-				position_sp.open(drive+"/position_sp", std::ofstream::out);
-				command.open(drive+"/command",std::ofstream::out);
-				position.open(drive+"/position");
+				std::string path;
+				path = gear+"/duty_cycle_sp";
+				duty_cycle_sp.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position_sp";
+				position_sp.open(path.c_str(), std::ofstream::out);
+				path = gear+"/command";
+				command.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position";
+				position.open(path.c_str());
 				
-				position << ang3 <<endl;
+				position << ang3 << std::endl;
 	
 				std::cout <<"Set duty cycle." <<std::endl;
 				duty_cycle_sp << 100 << std::endl;
 				std::cout << "Set position." << std::endl;
 				position_sp << angleData[2] << std::endl;
 				std::cout << "Set command." << std::endl;
-				command << run_to_abs_pos << std::endl;
+				command << "run_to_abs_pos" << std::endl;
 		
-				Sleep(3);
+				sleep(3);
 				ang3 = angleData[2];
 					
 				//open gears
-				duty_cycle_sp.open(gear+"/duty_cycle_sp",std::ofstream::out);
-				position_sp.open(gear+"/position_sp", std::ofstream::out);
-				command.open(gear+"/command",std::ofstream::out);
-				position.open(gear+"/position");
+				path = gear+"/duty_cycle_sp";
+				duty_cycle_sp.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position_sp";
+				position_sp.open(path.c_str(), std::ofstream::out);
+				path = gear+"/command";
+				command.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position";
+				position.open(path.c_str());
 					
 				std::cout <<"Set duty cycle." <<std::endl;
 				duty_cycle_sp << 100 << std::endl;
 				std::cout << "Set position." << std::endl;
 				position_sp << 75 << std::endl;
 				std::cout << "Set command." << std::endl;
-				command << run_to_abs_pos << std::endl;
+				command << "run_to_abs_pos" << std::endl;
 			}
 			else
 			{
