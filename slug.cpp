@@ -17,6 +17,7 @@
 	std::ofstream position_sp;
 	std::ofstream command;
 	std::ofstream position;
+std::ofstream speed_regulation_enabled; 
 	
 	std::string roll ="/sys/class/tacho-motor/motor0";
 	std::string drive = "/sys/class/tacho-motor/motor1";
@@ -83,7 +84,7 @@ int driveM(double x, double y, double z, double ang);
 		int angleData[3];
 		angleCalc(x,y,z,ang, angleData);
 			//check which gear it's on
-			if(abs(posGear - 75) < 10) //arm
+			if(abs(posGear - 75) < 5) //arm <10
 			{
 				std::cout<< "Gear is driving main arm."<<std::endl;
 				//11cm
@@ -128,7 +129,7 @@ int driveM(double x, double y, double z, double ang);
 				std::cout << "Set command." << std::endl;
 				command << "run_to_abs_pos" << std::endl;
 			}	
-			else if(abs(posGear - 165) < 15 ) //forearm
+			else if(abs(posGear - 165) < 5) //forearm < 15
 			{ 
 				std::cout<< "Gear is driving forearm."<<std::endl;
 				//measure degrees the forearm moves when reached the tacho value: 7915
@@ -175,7 +176,7 @@ int driveM(double x, double y, double z, double ang);
 				std::cout << "Set command." << std::endl;
 				command << "run_to_abs_pos" << std::endl;					
 			}	
-			else if(abs(posGear-23) < 23) //finger
+			else if(abs(posGear-23) < 5) //finger  <23
 			{
 				std::cout<< "Gear is driving finger."<<std::endl;
 				//9.5cm
@@ -190,9 +191,13 @@ int driveM(double x, double y, double z, double ang);
 				command.open(path.c_str(),std::ofstream::out);
 				path = gear+"/position";
 				position.open(path.c_str());
+				path = gear+"/speed_regulation_enabled";
+				speed_regulation_enabled.open(path.c_str(),std::ofstream::out);
 				
 				position << ang3 << std::endl;
 	
+				std::cout <<"Enabling Speed Regulation" <<std::endl;
+				speed_regulation_enabled <<"on"<< std::endl;
 				std::cout <<"Set duty cycle." <<std::endl;
 				duty_cycle_sp << 100 << std::endl;
 				std::cout << "Set position." << std::endl;
@@ -223,7 +228,30 @@ int driveM(double x, double y, double z, double ang);
 			else
 			{
 				std::cout<< "Gear is still shifting, please wait."<<std::endl;
+				std::string path; 
+					//open gears
+				path = gear+"/duty_cycle_sp";
+				duty_cycle_sp.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position_sp";
+				position_sp.open(path.c_str(), std::ofstream::out);
+				path = gear+"/command";
+				command.open(path.c_str(),std::ofstream::out);
+				path = gear+"/position";
+				position.open(path.c_str());
+
+				path = gear +"/speed_regulation_enabled";
+				speed_regulation_enabled.open(path.c_str(), std::ofstream::out);
+		
+				std::cout <<"enabling speed regulation" <<std::endl;
+				speed_regulation_enabled << "on" <<std::endl;
+				std::cout <<"Set duty cycle." <<std::endl;
+				duty_cycle_sp << 100 << std::endl;
+				std::cout << "Set position." << std::endl;
+				position_sp << 75 << std::endl;
+				std::cout << "Set command." << std::endl;
+				command << "run_to_abs_pos" << std::endl;
+
 			}						
-		}
+		} 
 	
 	
