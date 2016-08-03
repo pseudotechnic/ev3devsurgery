@@ -272,8 +272,9 @@ int main(int argc, char* argv[])
 //radian to degree converter
 double radToDeg(double x)
 {
-    double answer = tan(x * PI / 180);
-    return answer; 
+  //double answer = tan(x * PI / 180);
+  double answer = x * 180.0 / PI;
+  return answer; 
 }
 
 
