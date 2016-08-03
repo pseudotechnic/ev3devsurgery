@@ -228,25 +228,32 @@ bool GearMotor::Switch(int joint)
 int driveM(double x, double y, double z, double ang, Motor& roll, Motor& drive, GearMotor& gear);
 
 //length of arms
-int L1 = 11;
+int L1 = 9.5;
 int L2 = 20;
-int L3 = 9.5;
+int L3 = 9;
 
 //these are the current angles. It is set to 0 because assume robot starts at 0 position
 int angArm;
 int angForearm;
 int angFinger;
 
-int main()
+int main(int argc, char* argv[])
 {
+  double xCoord= 00;
+  double yCoord= 10; 
+  double zCoord= 20; 
+
+  if (argc > 3)
+    {
+    xCoord= atoi(argv[1]);
+    yCoord= atoi(argv[2]); 
+    zCoord= atoi(argv[3]); 
+    }
 
   Motor roll("outA");
   Motor drive("outB");
   GearMotor gear("outC");
 
-  double xCoord= 00;
-  double yCoord= 10; 
-  double zCoord= 20; 
   double angle= 90;
 
   // Homing
