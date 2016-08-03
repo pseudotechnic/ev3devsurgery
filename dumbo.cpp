@@ -58,7 +58,7 @@ Motor::Motor(const char* port)
   std::string commandPath;
   commandPath = this->motorPath + "/stop_command";
   stop_command.open(commandPath.c_str());
-  stop_command << "brake" << std::endl;
+  stop_command << "hold" << std::endl;
   stop_command.close();
 }
 
@@ -210,7 +210,7 @@ bool GearMotor::Switch(int joint)
     case JOINT_FOREARM:
       angle = 165;
       std::cerr << "Switch to JOINT_FOREARM" << std::endl;
-      break;
+     break;
     case JOINT_FINGER:
       angle = 23;
       std::cerr << "Switch to JOINT_FINGER" << std::endl;
@@ -244,9 +244,9 @@ int main()
   Motor drive("outB");
   GearMotor gear("outC");
 
-  double xCoord= 10;
+  double xCoord= 00;
   double yCoord= 10; 
-  double zCoord= 0; 
+  double zCoord= 20; 
   double angle= 90;
 
   // Homing
@@ -267,10 +267,23 @@ double radToDeg(double x)
 {
     double answer = tan(x * PI / 180);
     return answer; 
-  }
+}
+
+
+double calcRollAngle(double pX, double pY, double pZ)
+{
+  return (90.0 - radToDeg(atan2(pY, pX)));
+}
 	
+double transformTargetToInPlane(double pX, double pY, double pZ, double& pinX, double& pinY)
+{
+  pinX = pZ;
+  pinY = sqrt(pX*pX + pY*pY);
+}
+
+
 //calculate the angles
-void angleCalc(double pX, double pY, double pZ, double ang, int* answer)
+void angleCalcInPlane(double pX, double pY, double pZ, double ang, int* answer)
    {		
      //double pX = L1*cos(angle1) + L2*cos(angle1 + angle2);
      //double pY = L2*sin(angle1) + L2*sin(angle1 + angle2); 
@@ -293,8 +306,17 @@ void angleCalc(double pX, double pY, double pZ, double ang, int* answer)
 int driveM(double x, double y, double z, double ang, Motor& roll, Motor& drive, GearMotor& gear)
 {
 
-  int angleData[3];
-  angleCalc(x,y,z,ang, angleData);
+  int angleData[4];
+
+  // Roll angle
+  angleData[3] = calcRollAngle(x, y, z);
+
+  double pinX;
+  double pinY;
+
+  transformTargetToInPlane(x, y, z, pinX, pinY);
+
+  angleCalcInPlane(pinX,pinY,0.0, ang, angleData);
   std::cerr << "angleData = (" 
 	    << angleData[0] << ", "
 	    << angleData[1] << ", "
@@ -322,6 +344,8 @@ int driveM(double x, double y, double z, double ang, Motor& roll, Motor& drive, 
   drive.ResetPosition(0);
   drive.Move((double)(angleData[2]-angFinger+angArm+angForearm)*ratioFinger);
   angFinger += drive.GetPosition()/ratioFinger-angArm-angForearm;
+
+  roll.Move((double)angleData[3]);
   
 } 
 	
