@@ -67,7 +67,7 @@ int Motor::GetMotorPath(const char* port, std::string& path)
 {
   std::string basePath = "/sys/class/tacho-motor/";
 
-  for (int i = 0; i < 4; i ++)
+  for (int i = 0; i < 20; i ++)
     {
       std::stringstream ss;
       ss << basePath << "motor" << i << "/address";
