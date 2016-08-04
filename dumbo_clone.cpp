@@ -3,8 +3,19 @@
 #include <sstream>
 #include <unistd.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <math.h>
+
+#include <iomanip>
+#include <cstdlib>
+#include <cstring>
+
+#include "igtlOSUtil.h"
+#include "igtlMessageHeader.h"
+#include "igtlTransformMessage.h"
+#include "igtlPositionMessage.h"
+#include "igtlImageMessage.h"
+#include "igtlClientSocket.h"
+#include "igtlStatusMessage.h"
 
 #define PI 3.14159265
 
@@ -15,6 +26,7 @@
 double radToDeg(double x);
 void angleCalc(double pX, double pY, double pZ, double ang, int* answer);
 void posUpdate(std::string motor, std::string var);
+int ReceiveTransform(igtl::Socket * socket, igtl::MessageHeader::Pointer& header, igtl::Matrix4x4& matrix);
 
 class Motor {
 public:
@@ -237,36 +249,36 @@ int angArm;
 int angForearm;
 int angFinger;
 
-int main(int argc, char* argv[])
-{
-  double xCoord= 00;
-  double yCoord= 10; 
-  double zCoord= 20; 
-
-  if (argc > 3)
-    {
-    xCoord= atoi(argv[1]);
-    yCoord= atoi(argv[2]); 
-    zCoord= atoi(argv[3]); 
-    }
-
-  Motor roll("outA");
-  Motor drive("outB");
-  GearMotor gear("outC");
-
-  double angle= 90;
-
-  // Homing
-  roll.ResetPosition(0);
-  drive.ResetPosition(0);
-  gear.ResetPosition(0);
-
-  angArm = 90;
-  angForearm = 0;
-  angFinger = 0;
-
-  driveM(xCoord,yCoord,zCoord,angle, roll, drive, gear);
-}
+//int main(int argc, char* argv[])
+//{
+//  double xCoord= 00;
+//  double yCoord= 10; 
+//  double zCoord= 20; 
+//
+//  if (argc > 3)
+//    {
+//    xCoord= atoi(argv[1]);
+//    yCoord= atoi(argv[2]); 
+//    zCoord= atoi(argv[3]); 
+//    }
+//
+//  Motor roll("outA");
+//  Motor drive("outB");
+//  GearMotor gear("outC");
+//
+//  double angle= 90;
+//
+//  // Homing
+//  roll.ResetPosition(0);
+//  drive.ResetPosition(0);
+//  gear.ResetPosition(0);
+//
+//  angArm = 90;
+//  angForearm = 0;
+//  angFinger = 0;
+//
+//  driveM(xCoord,yCoord,zCoord,angle, roll, drive, gear);
+//}
 
 
 //radian to degree converter
@@ -358,4 +370,164 @@ int driveM(double x, double y, double z, double ang, Motor& roll, Motor& drive, 
 } 
 	
 	
+int main(int argc, char* argv[])
+{
+  //------------------------------------------------------------
+  // Parse Arguments
+
+  if (argc != 3) // check number of arguments
+    {
+    // If not correct, print usage
+    std::cerr << "    <hostname> : IP or host name"                    << std::endl;
+    std::cerr << "    <port>     : Port # (18944 in Slicer default)"   << std::endl;
+    exit(0);
+    }
+
+  char*  hostname = argv[1];
+  int    port     = atoi(argv[2]);
+
+
+  //------------------------------------------------------------
+  // Initialize the robot
+
+  double xCoord= 00;
+  double yCoord= 10; 
+  double zCoord= 20; 
+
+  Motor roll("outA");
+  Motor drive("outB");
+  GearMotor gear("outC");
+
+  double angle= 90;
+
+  // Homing
+  roll.ResetPosition(0);
+  drive.ResetPosition(0);
+  gear.ResetPosition(0);
+
+  angArm = 90;
+  angForearm = 0;
+  angFinger = 0;
+
+  //------------------------------------------------------------
+  // Establish Connection
+
+  igtl::ClientSocket::Pointer socket;
+  socket = igtl::ClientSocket::New();
+  int r = socket->ConnectToServer(hostname, port);
+
+  if (r != 0)
+    {
+    std::cerr << "Cannot connect to the server." << std::endl;
+    exit(0);
+    }
+
+  //------------------------------------------------------------
+  // Create a message buffer to receive header
+  igtl::MessageHeader::Pointer headerMsg;
+  headerMsg = igtl::MessageHeader::New();
+  
+  //------------------------------------------------------------
+  // Allocate a time stamp 
+  igtl::TimeStamp::Pointer ts;
+  ts = igtl::TimeStamp::New();
+
+
+  while (1)
+    {
+    //------------------------------------------------------------
+    // loop
+    for (int i = 0; i < 100; i ++)
+      {
+      
+      // Initialize receive buffer
+      headerMsg->InitPack();
+      
+      // Receive generic header from the socket
+      int r = socket->Receive(headerMsg->GetPackPointer(), headerMsg->GetPackSize());
+      if (r == 0)
+        {
+        socket->CloseSocket();
+        exit(0);
+        }
+      if (r != headerMsg->GetPackSize())
+        {
+        continue;
+        }
+      
+      // Deserialize the header
+      headerMsg->Unpack();
+
+      // Get time stamp
+      igtlUint32 sec;
+      igtlUint32 nanosec;
+
+      headerMsg->GetTimeStamp(ts);
+      ts->GetTimeStamp(&sec, &nanosec);
+
+      std::cerr << "Time stamp: "
+                << sec << "." << std::setw(9) << std::setfill('0') 
+                << nanosec << std::endl;
+      
+      // Check data type and receive data body
+      if (strcmp(headerMsg->GetDeviceType(), "TRANSFORM") == 0)
+        {
+        igtl::Matrix4x4 matrix;        
+        ReceiveTransform(socket, headerMsg, matrix);
+
+        std::cerr << "Received matrix." << std::endl;
+        igtl::PrintMatrix(matrix);
+        std::cerr << std::endl;
+        
+        xCoord = matrix[0][3];
+        yCoord = matrix[1][3];
+        zCoord = matrix[2][3];
+
+	driveM(xCoord,yCoord,zCoord,angle, roll, drive, gear);
+        }
+      else
+        {
+        std::cerr << "Receiving : " << headerMsg->GetDeviceType() << std::endl;
+        socket->Skip(headerMsg->GetBodySizeToRead(), 0);
+        }
+      }
+    }
+
+  //------------------------------------------------------------
+  // Close connection (The example code never reaches this section ...)
+  
+  socket->CloseSocket();
+
+}
+
+
+int ReceiveTransform(igtl::Socket * socket, igtl::MessageHeader::Pointer& header, igtl::Matrix4x4& matrix)
+{
+  std::cerr << "Receiving TRANSFORM data type." << std::endl;
+  
+  // Create a message buffer to receive transform data
+  igtl::TransformMessage::Pointer transMsg;
+  transMsg = igtl::TransformMessage::New();
+  transMsg->SetMessageHeader(header);
+  transMsg->AllocatePack();
+  
+  // Receive transform data from the socket
+  socket->Receive(transMsg->GetPackBodyPointer(), transMsg->GetPackBodySize());
+  
+  // Deserialize the transform data
+  // If you want to skip CRC check, call Unpack() without argument.
+  int c = transMsg->Unpack(1);
+  
+  if (c & igtl::MessageHeader::UNPACK_BODY) // if CRC check is OK
+    {
+    // Retrive the transform data
+    transMsg->GetMatrix(matrix);
+    return 1;
+    }
+
+  return 0;
+}
+
+
+
 //Posgear not updating correctly??
